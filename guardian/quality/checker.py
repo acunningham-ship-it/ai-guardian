@@ -10,17 +10,21 @@ from guardian.models.schemas import QualityReport, QualityVerdict
 
 DANGEROUS_PATTERNS: list[tuple[str, str]] = [
     # API keys / secrets in code
-    (r'(?:api_key|apikey|api-key|secret|password|token)\s*=\s*["\'][^"\']{8,}["\']',
+    (r'(?:api_key|apikey|api-key|secret|password|token)\s*=\s*["\'][A-Za-z0-9_\-]{16,}["\']',
      "Hardcoded API key or secret detected"),
     (r'(?:sk-|pk-|ghp_|gho_)[a-zA-Z0-9]{20,}',
      "Potential API key in code"),
     # SQL injection risks
+    (r'(?:SELECT|INSERT|UPDATE|DELETE).*%\s*\w+',
+     "Potential SQL injection (string formatting in query)"),
     (r'execute\s*\(\s*["\'].*%s',
      "Potential SQL injection (string formatting in query)"),
     (r'execute\s*\(\s*f["\']',
      "Potential SQL injection (f-string in query)"),
-    (r'\.format\s*\).*(?:SELECT|INSERT|UPDATE|DELETE)',
+    (r'\.format\s*\).*(?:SELECT|INSERT|UPDATE|DELETE|execute|cursor)',
      "Potential SQL injection (.format() in query)"),
+    (r'(?:SELECT|INSERT|UPDATE|DELETE).*(?:\+|%|format)\s*\(',
+     "Potential SQL injection (string concatenation in query)"),
     # Dangerous eval/exec
     (r'\beval\s*\(',
      "Dangerous eval() call detected"),
@@ -77,16 +81,24 @@ def _extract_code_blocks(text: str) -> list[str]:
     blocks = re.findall(r'```(?:\w+)?\n(.*?)```', text, re.DOTALL)
     if blocks:
         return blocks
-    # If the whole thing looks like code
-    if any(kw in text for kw in ["def ", "class ", "import ", "function", "const ", "var "]):
+    # If the whole thing looks like code (has code keywords and structure)
+    code_indicators = ["def ", "class ", "import ", "function", "const ", "var ",
+                       "for ", "if ", "while ", "return ", "async ", "await "]
+    line_count = len([l for l in text.strip().split("\n") if l.strip()])
+    indicator_count = sum(1 for kw in code_indicators if kw in text)
+    # Need at least 2 code indicators AND multiple lines to be "code"
+    if indicator_count >= 2 and line_count >= 3:
         return [text]
     return []
 
 
 def _check_syntax(code: str) -> Optional[str]:
     """Try to parse Python code. Returns error message or None."""
+    import textwrap
     try:
-        ast.parse(code)
+        # Remove common leading whitespace from markdown code blocks
+        cleaned = textwrap.dedent(code.strip())
+        ast.parse(cleaned)
         return None
     except SyntaxError as e:
         return f"Syntax error at line {e.lineno}: {e.msg}"

@@ -119,7 +119,8 @@ def route_model(
         alternatives = get_cheaper_alternatives(requested_model)
         for alt in alternatives:
             alt_tier = MODEL_TIERS.get(alt, 2)
-            if alt_tier >= task_tier:
+            # Allow one tier below task requirement (cheaper model can still handle it)
+            if alt_tier >= task_tier - 1:
                 current_price = MODEL_PRICING.get(requested_model, {}).get("out", 10)
                 alt_price = MODEL_PRICING.get(alt, {}).get("out", 10)
                 savings = ((current_price - alt_price) / current_price * 100) if current_price else 0

@@ -27,7 +27,10 @@ from guardian.models.database import init_db, async_session, UsageLog, get_spent
 from guardian.models.schemas import (
     ChatMessage, ProxyRequest, ProxyResponse, QualityReport,
 )
+from pydantic import BaseModel
 from guardian.quality.checker import check_quality
+from guardian.api.users import create_user, get_user_key, list_user_keys, delete_user_key, update_budget
+from guardian.api.alerts import check_and_alert
 
 app = FastAPI(title="AI Guardian", version="0.1.0")
 
@@ -162,6 +165,67 @@ async def get_budget(user_id: str):
     """Get current budget status."""
     budget = await check_budget(user_id)
     return budget
+
+
+# ── User Management API ────────────────────────────────────────────
+
+class RegisterUserRequest(BaseModel):
+    user_id: str
+    provider: str  # openai, anthropic, google, deepseek
+    api_key: str
+    monthly_budget: Optional[float] = None
+    daily_budget: Optional[float] = None
+    webhook_url: Optional[str] = None
+
+
+class UpdateBudgetRequest(BaseModel):
+    monthly_budget: Optional[float] = None
+    daily_budget: Optional[float] = None
+    hard_cap: Optional[bool] = None
+    alert_at_pct: Optional[float] = None
+    webhook_url: Optional[str] = None
+
+
+@app.post("/guardian/users")
+async def register_user(req: RegisterUserRequest):
+    """Register a user with their provider API key (encrypted storage)."""
+    result = await create_user(
+        user_id=req.user_id,
+        provider=req.provider,
+        api_key=req.api_key,
+        monthly_budget=req.monthly_budget,
+        daily_budget=req.daily_budget,
+    )
+    return result
+
+
+@app.get("/guardian/users/{user_id}/keys")
+async def get_user_keys(user_id: str):
+    """List which providers a user has stored keys for."""
+    keys = await list_user_keys(user_id)
+    return {"user_id": user_id, "providers": keys}
+
+
+@app.delete("/guardian/users/{user_id}/keys/{provider}")
+async def remove_user_key(user_id: str, provider: str):
+    """Delete a stored API key."""
+    deleted = await delete_user_key(user_id, provider)
+    if deleted:
+        return {"status": "deleted", "user_id": user_id, "provider": provider}
+    raise HTTPException(status_code=404, detail="Key not found")
+
+
+@app.put("/guardian/users/{user_id}/budget")
+async def set_budget(user_id: str, req: UpdateBudgetRequest):
+    """Update budget configuration for a user."""
+    result = await update_budget(
+        user_id=user_id,
+        monthly_budget=req.monthly_budget,
+        daily_budget=req.daily_budget,
+        hard_cap=req.hard_cap,
+        alert_at_pct=req.alert_at_pct,
+    )
+    return result
 
 
 # ── Dashboard ──────────────────────────────────────────────────────
@@ -441,6 +505,25 @@ async def chat_completions(request: Request):
             )
         await record_iteration(session_id, usage_data.get("total_tokens", 0), cost)
 
+    # ── LAYER 5: Alert Dispatch ────────────────────────────────────
+    webhook_url = request.headers.get("x-guardian-webhook")
+    agent_capped_flag = False
+    if agent_id and session_id:
+        from guardian.agent.monitor import is_session_capped as _isc
+        agent_capped_flag = _isc(session_id)
+
+    await check_and_alert(
+        user_id=user_id,
+        budget_status=budget.status,
+        daily_spent=budget.daily_spent,
+        daily_budget=budget.daily_budget,
+        monthly_spent=budget.monthly_spent,
+        monthly_budget=budget.monthly_budget,
+        webhook_url=webhook_url,
+        quality_score=quality.score if quality else None,
+        agent_capped=agent_capped_flag,
+    )
+
     # ── Log Usage ─────────────────────────────────────────────────
     warnings = []
     if routing.reason != "none":
@@ -451,21 +534,20 @@ async def chat_completions(request: Request):
         warnings.append(f"Budget: {budget.status.value} (${budget.monthly_spent:.2f}/${budget.monthly_budget:.2f})")
 
     async with async_session() as db_session:
-        await db_session.execute(
-            UsageLog.__table__.insert().values(
-                user_id=user_id,
-                project_id=project_id,
-                agent_id=agent_id,
-                model=actual_model,
-                provider=provider,
-                prompt_tokens=usage_data.get("prompt_tokens", 0),
-                completion_tokens=usage_data.get("completion_tokens", 0),
-                total_tokens=usage_data.get("total_tokens", 0),
-                cost_usd=cost,
-                quality_score=quality.score if quality else None,
-                warnings=json.dumps(warnings) if warnings else None,
-            )
+        log_entry = UsageLog(
+            user_id=user_id,
+            project_id=project_id,
+            agent_id=agent_id,
+            model=actual_model,
+            provider=provider,
+            prompt_tokens=usage_data.get("prompt_tokens", 0),
+            completion_tokens=usage_data.get("completion_tokens", 0),
+            total_tokens=usage_data.get("total_tokens", 0),
+            cost_usd=cost,
+            quality_score=quality.score if quality else None,
+            warnings=json.dumps(warnings) if warnings else None,
         )
+        db_session.add(log_entry)
         await db_session.commit()
 
     # Build response (OpenAI format for compatibility)
