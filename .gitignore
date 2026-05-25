@@ -1,1 +1,9 @@
-ai-guardian
+# AI Guardian
+*.pyc
+__pycache__/
+.env
+*.db
+.venv/
+dist/
+build/
+*.egg-info/
