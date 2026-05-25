@@ -1,0 +1,21 @@
+version: "3.8"
+
+services:
+  guardian:
+    build: .
+    ports:
+      - "${GUARDIAN_PORT:-9191}:9191"
+    environment:
+      - GUARDIAN_SECRET=${GUARDIAN_SECRET:-change-me-in-production}
+      - DEFAULT_MONTHLY_BUDGET=${DEFAULT_MONTHLY_BUDGET:-100}
+      - DEFAULT_DAILY_BUDGET=${DEFAULT_DAILY_BUDGET:-10}
+      - DEFAULT_HARD_CAP=${DEFAULT_HARD_CAP:-true}
+      - PREFER_CHEAP_MODELS=${PREFER_CHEAP_MODELS:-true}
+      - ENABLE_CODE_VALIDATION=${ENABLE_CODE_VALIDATION:-true}
+      - ENABLE_SECURITY_SCAN=${ENABLE_SECURITY_SCAN:-true}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9191/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

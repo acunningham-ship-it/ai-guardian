@@ -348,25 +348,23 @@ code {{ background: #1a1a2a; padding: 0.1rem 0.3rem; border-radius: 3px; font-si
 
 
 # ── Proxy: Chat Completions ────────────────────────────────────────
+# ── Proxy: Chat Completions ────────────────────────────────────────
 
 @app.post("/v1/chat/completions")
 async def chat_completions(request: Request):
     """
     Main proxy endpoint — compatible with OpenAI Chat Completions API.
-    Clients send requests here; Guardian applies guardrails then forwards
-    to the actual provider.
+    Supports both streaming (SSE) and non-streaming responses.
     """
     body = await request.json()
     req_id = request.state.request_id
 
-    # Parse request
     model = body.get("model", "openai/gpt-4o")
     messages = body.get("messages", [])
     max_tokens = body.get("max_tokens", app_settings.max_tokens_per_request)
     temperature = body.get("temperature", 1.0)
     stream = body.get("stream", False)
 
-    # Extract user/agent metadata from custom headers
     user_id = request.headers.get("x-guardian-user", "default")
     project_id = request.headers.get("x-guardian-project")
     agent_id = request.headers.get("x-guardian-agent")
@@ -379,7 +377,6 @@ async def chat_completions(request: Request):
     hard_cap = budget.would_exceed and budget.status.value == "exceeded"
 
     if hard_cap:
-        # Still allow if it's a very small request (< $0.01)
         estimated = estimate_cost(model, 1000, 500)
         if estimated > 0.01:
             raise HTTPException(
@@ -400,91 +397,236 @@ async def chat_completions(request: Request):
     )
     routed_model = routing.routed_model
 
-    # ── Forward Request to Provider ───────────────────────────────
+    # ── Get API Key ────────────────────────────────────────────────
     api_key = get_api_key(provider, request)
     if not api_key:
-        raise HTTPException(
-            status_code=401,
-            detail=f"No API key for {provider}. Pass via Authorization: Bearer <key> or x-api-key header.",
+        # Try to get stored key for this user
+        stored_key = await get_user_key(user_id, provider)
+        if stored_key:
+            api_key = stored_key
+        else:
+            raise HTTPException(
+                status_code=401,
+                detail=f"No API key for {provider}. Pass via Authorization header or register with /guardian/users",
+            )
+
+    # ── Forward to Provider ───────────────────────────────────────
+    if stream:
+        return await _streaming_proxy(
+            req_id, provider, routed_model, api_key, messages,
+            max_tokens, temperature, user_id, project_id, agent_id,
+            session_id, model, routing, budget,
+        )
+    else:
+        return await _non_streaming_proxy(
+            req_id, provider, routed_model, api_key, messages,
+            max_tokens, temperature, user_id, project_id, agent_id,
+            session_id, model, routing, budget,
         )
 
-    # Build provider-specific request
-    provider_url = PROVIDER_URLS[provider]
+
+async def _non_streaming_proxy(
+    req_id, provider, routed_model, api_key, messages,
+    max_tokens, temperature, user_id, project_id, agent_id,
+    session_id, original_model, routing, budget,
+):
+    """Handle non-streaming requests."""
+    provider_url, headers, request_body = _build_provider_request(
+        provider, routed_model, api_key, messages, max_tokens, temperature, stream=False,
+    )
+
+    async with httpx.AsyncClient(timeout=120) as client:
+        resp = await client.post(provider_url, headers=headers, json=request_body)
+
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+
+    usage_data, content = _parse_provider_response(provider, resp)
+    return _build_response(
+        req_id, provider, routed_model, original_model, routing, budget,
+        usage_data, content, messages, user_id, project_id, agent_id, session_id,
+    )
+
+
+async def _streaming_proxy(
+    req_id, provider, routed_model, api_key, messages,
+    max_tokens, temperature, user_id, project_id, agent_id,
+    session_id, original_model, routing, budget,
+):
+    """
+    Handle streaming (SSE) requests.
+    Passes through the stream in real-time while buffering for post-hoc analysis.
+    """
+    provider_url, headers, request_body = _build_provider_request(
+        provider, routed_model, api_key, messages, max_tokens, temperature, stream=True,
+    )
+
+    async def generate():
+        """Stream chunks to client, buffer for post-hoc analysis."""
+        full_content = ""
+        usage_data = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+
+        async with httpx.AsyncClient(timeout=120) as client:
+            async with client.stream("POST", provider_url, headers=headers, json=request_body) as resp:
+                if resp.status_code >= 400:
+                    error_body = await resp.aread()
+                    yield f"data: {json.dumps({'error': error_body.decode()})}\n\n"
+                    return
+
+                async for line in resp.aiter_lines():
+                    if not line:
+                        continue
+
+                    # Pass through the SSE line to the client
+                    yield f"{line}\n\n"
+
+                    # Parse and buffer
+                    if line.startswith("data: "):
+                        data_str = line[6:]
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(data_str)
+                            # Extract content from chunk
+                            if provider == "anthropic":
+                                delta = chunk.get("delta", {})
+                                if delta.get("type") == "text_delta":
+                                    full_content += delta.get("text", "")
+                                # Anthropic sends usage in message_start
+                                if chunk.get("type") == "message_start":
+                                    msg_usage = chunk.get("message", {}).get("usage", {})
+                                    usage_data["prompt_tokens"] = msg_usage.get("input_tokens", 0)
+                                if chunk.get("type") == "message_delta":
+                                    msg_usage = chunk.get("usage", {})
+                                    usage_data["completion_tokens"] = msg_usage.get("output_tokens", 0)
+                            else:
+                                # OpenAI format
+                                choices = chunk.get("choices", [])
+                                for c in choices:
+                                    delta = c.get("delta", {})
+                                    full_content += delta.get("content", "")
+                                # Usage is typically in the last chunk or separate
+                                if chunk.get("usage"):
+                                    usage_data = chunk["usage"]
+                        except json.JSONDecodeError:
+                            pass
+
+        # Post-stream: apply guardrails and log
+        # Calculate cost
+        cost = estimate_cost(
+            routed_model,
+            usage_data.get("prompt_tokens", 0),
+            usage_data.get("completion_tokens", 0),
+        )
+
+        # Quality check
+        quality = None
+        if app_settings.enable_code_validation and full_content:
+            quality = check_quality(
+                full_content, messages,
+                enable_security=app_settings.enable_security_scan,
+                enable_performance=app_settings.enable_performance_check,
+            )
+
+        # Agent monitoring
+        if agent_id and session_id:
+            await record_iteration(
+                session_id,
+                usage_data.get("total_tokens", 0),
+                cost,
+            )
+
+        # Log usage
+        warnings_list = []
+        if routing.reason != "none":
+            warnings_list.append(f"Model routed: {original_model} -> {routed_model} ({routing.reason})")
+        if quality and quality.verdict.value != "pass":
+            warnings_list.append(f"Quality: {quality.verdict.value} ({quality.score})")
+        if budget.status.value != "ok":
+            warnings_list.append(f"Budget: {budget.status.status}")
+
+        # Send alerts
+        webhook_url = None  # Could be retrieved from user config
+        await check_and_alert(
+            user_id=user_id,
+            budget_status=budget.status,
+            daily_spent=budget.daily_spent,
+            daily_budget=budget.daily_budget,
+            monthly_spent=budget.monthly_spent,
+            monthly_budget=budget.monthly_budget,
+            webhook_url=webhook_url,
+            quality_score=quality.score if quality else None,
+        )
+
+        async with async_session() as db_session:
+            log_entry = UsageLog(
+                user_id=user_id,
+                project_id=project_id,
+                agent_id=agent_id,
+                model=routed_model,
+                provider=provider,
+                prompt_tokens=usage_data.get("prompt_tokens", 0),
+                completion_tokens=usage_data.get("completion_tokens", 0),
+                total_tokens=usage_data.get("total_tokens", 0),
+                cost_usd=cost,
+                quality_score=quality.score if quality else None,
+                warnings=json.dumps(warnings_list) if warnings_list else None,
+            )
+            db_session.add(log_entry)
+            await db_session.commit()
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "X-Guardian-Request-Id": req_id,
+            "Cache-Control": "no-cache",
+        },
+    )
+
+
+def _build_provider_request(provider, routed_model, api_key, messages, max_tokens, temperature, stream):
+    """Build the appropriate request for each provider."""
+    base_url = PROVIDER_URLS[provider]
     headers = {"Content-Type": "application/json"}
-    anthropic_body = None
-    google_body = None
-    provider_body = None
 
     if provider == "anthropic":
         headers["x-api-key"] = api_key
         headers["anthropic-version"] = "2023-06-01"
-        anthropic_body = _to_anthropic_format(routed_model, messages, max_tokens, temperature, stream)
+        body = _to_anthropic_format(routed_model, messages, max_tokens, temperature, stream)
+        return f"{base_url}/messages", headers, body
+
     elif provider == "google":
         headers["x-goog-api-key"] = api_key
-        google_body = _to_google_format(routed_model, messages, max_tokens, temperature)
-        provider_url = f"{provider_url}/models/{routed_model}:generateContent"
+        body = _to_google_format(routed_model, messages, max_tokens, temperature)
+        url = f"{base_url}/models/{routed_model}:generateContent"
+        return url, headers, body
+
     else:
         headers["Authorization"] = f"Bearer {api_key}"
-        provider_body = {
+        body = {
             "model": routed_model,
             "messages": messages,
             "max_tokens": min(max_tokens, app_settings.max_tokens_per_request),
             "temperature": temperature,
             "stream": stream,
         }
+        return f"{base_url}/chat/completions", headers, body
 
-    # Make the actual API call
-    async with httpx.AsyncClient(timeout=120) as client:
-        if provider == "anthropic":
-            if stream:
-                resp = await client.post(
-                    f"{provider_url}/messages",
-                    headers=headers,
-                    json={**anthropic_body, "stream": True},
-                )
-            else:
-                resp = await client.post(
-                    f"{provider_url}/messages",
-                    headers=headers,
-                    json=anthropic_body,
-                )
-        elif provider == "google":
-            resp = await client.post(
-                provider_url,
-                headers=headers,
-                json=google_body,
-            )
-        else:
-            resp = await client.post(
-                f"{provider_url}/chat/completions",
-                headers=headers,
-                json=provider_body,
-            )
 
-    if resp.status_code >= 400:
-        raise HTTPException(
-            status_code=resp.status_code,
-            detail=resp.text,
-        )
-
-    # Parse response
-    if provider == "anthropic":
-        usage_data, content = _parse_anthropic_response(resp)
-    elif provider == "google":
-        usage_data, content = _parse_google_response(resp)
-    else:
-        usage_data, content = _parse_openai_response(resp)
-
-    # Calculate cost
-    actual_model = routed_model  # Use the actually-used model for pricing
+async def _build_response(
+    req_id, provider, routed_model, original_model, routing, budget,
+    usage_data, content, messages, user_id, project_id, agent_id, session_id,
+):
+    """Build and return a non-streaming response with all guardrails applied."""
     cost = estimate_cost(
-        actual_model,
+        routed_model,
         usage_data.get("prompt_tokens", 0),
         usage_data.get("completion_tokens", 0),
     )
 
-    # ── LAYER 3: Quality Check ────────────────────────────────────
-    quality: Optional[QualityReport] = None
+    # Quality check
+    quality = None
     if app_settings.enable_code_validation and content:
         quality = check_quality(
             content, messages,
@@ -492,7 +634,7 @@ async def chat_completions(request: Request):
             enable_performance=app_settings.enable_performance_check,
         )
 
-    # ── LAYER 4: Agent Monitoring ─────────────────────────────────
+    # Agent monitoring
     if agent_id and session_id:
         from guardian.agent.monitor import record_iteration, is_session_capped
         if is_session_capped(session_id):
@@ -505,8 +647,8 @@ async def chat_completions(request: Request):
             )
         await record_iteration(session_id, usage_data.get("total_tokens", 0), cost)
 
-    # ── LAYER 5: Alert Dispatch ────────────────────────────────────
-    webhook_url = request.headers.get("x-guardian-webhook")
+    # Alert dispatch
+    webhook_url = None
     agent_capped_flag = False
     if agent_id and session_id:
         from guardian.agent.monitor import is_session_capped as _isc
@@ -524,37 +666,36 @@ async def chat_completions(request: Request):
         agent_capped=agent_capped_flag,
     )
 
-    # ── Log Usage ─────────────────────────────────────────────────
-    warnings = []
+    # Log usage
+    warnings_list = []
     if routing.reason != "none":
-        warnings.append(f"Model routed: {model} -> {routed_model} ({routing.reason}, saved ~{routing.estimated_savings_pct}%)")
+        warnings_list.append(f"Model routed: {original_model} -> {routed_model} ({routing.reason}, saved ~{routing.estimated_savings_pct}%)")
     if quality and quality.verdict.value != "pass":
-        warnings.append(f"Quality check: {quality.verdict.value} (score: {quality.score})")
+        warnings_list.append(f"Quality check: {quality.verdict.value} (score: {quality.score})")
     if budget.status.value != "ok":
-        warnings.append(f"Budget: {budget.status.value} (${budget.monthly_spent:.2f}/${budget.monthly_budget:.2f})")
+        warnings_list.append(f"Budget: {budget.status.value} (${budget.monthly_spent:.2f}/${budget.monthly_budget:.2f})")
 
     async with async_session() as db_session:
         log_entry = UsageLog(
             user_id=user_id,
             project_id=project_id,
             agent_id=agent_id,
-            model=actual_model,
+            model=routed_model,
             provider=provider,
             prompt_tokens=usage_data.get("prompt_tokens", 0),
             completion_tokens=usage_data.get("completion_tokens", 0),
             total_tokens=usage_data.get("total_tokens", 0),
             cost_usd=cost,
             quality_score=quality.score if quality else None,
-            warnings=json.dumps(warnings) if warnings else None,
+            warnings=json.dumps(warnings_list) if warnings_list else None,
         )
         db_session.add(log_entry)
         await db_session.commit()
 
-    # Build response (OpenAI format for compatibility)
-    response_body = {
+    return {
         "id": f"guardian-{req_id}",
         "object": "chat.completion",
-        "model": actual_model,
+        "model": routed_model,
         "choices": [{
             "index": 0,
             "message": {"role": "assistant", "content": content},
@@ -570,11 +711,19 @@ async def chat_completions(request: Request):
             "routed": routing.dict() if routing.reason != "none" else None,
             "quality": quality.dict() if quality else None,
             "budget_status": budget.status.value,
-            "warnings": warnings,
+            "warnings": warnings_list,
         },
     }
 
-    return response_body
+
+def _parse_provider_response(provider: str, resp: httpx.Response) -> tuple[dict, str]:
+    """Parse response from any provider into (usage_dict, content_string)."""
+    if provider == "anthropic":
+        return _parse_anthropic_response(resp)
+    elif provider == "google":
+        return _parse_google_response(resp)
+    else:
+        return _parse_openai_response(resp)
 
 
 # ── Format Converters ──────────────────────────────────────────────
