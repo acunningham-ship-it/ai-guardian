@@ -373,20 +373,26 @@ async def chat_completions(request: Request):
     provider = resolve_provider(model)
 
     # ── LAYER 1: Budget Check ──────────────────────────────────────
-    budget = await check_budget(user_id, project_id=project_id)
-    hard_cap = budget.would_exceed and budget.status.value == "exceeded"
+    # Estimate cost for budget check using max_tokens from the request
+    _est_prompt_tokens = sum(len(m.get("content", "").split()) * 2 for m in messages)
+    _est_completion_tokens = max_tokens or app_settings.max_tokens_per_request
+    _estimated_cost = estimate_cost(model, _est_prompt_tokens, _est_completion_tokens)
 
-    if hard_cap:
-        estimated = estimate_cost(model, 1000, 500)
-        if estimated > 0.01:
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "error": "budget_exceeded",
-                    "message": f"Monthly budget exhausted. Spent ${budget.monthly_spent:.2f} of ${budget.monthly_budget:.2f}",
-                    "budget": budget.dict(),
-                },
-            )
+    budget = await check_budget(
+        user_id,
+        estimated_cost=_estimated_cost,
+        project_id=project_id,
+    )
+
+    if budget.status.value == "exceeded":
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "budget_exceeded",
+                "message": f"Budget would be exceeded. Spent ${budget.monthly_spent:.2f} of ${budget.monthly_budget:.2f}. Estimated cost: ${_estimated_cost:.4f}",
+                "budget": budget.dict(),
+            },
+        )
 
     # ── LAYER 2: Model Routing ────────────────────────────────────
     budget_remaining = max(0, budget.monthly_budget - budget.monthly_spent)

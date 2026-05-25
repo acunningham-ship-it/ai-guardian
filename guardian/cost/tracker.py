@@ -131,7 +131,11 @@ async def check_budget(
 
         if daily_pct >= 100 or monthly_pct >= 100:
             status = BudgetStatus.EXCEEDED
+        elif would_exceed and config.hard_cap:
+            status = BudgetStatus.EXCEEDED
         elif daily_pct >= config.alert_at_pct or monthly_pct >= config.alert_at_pct:
+            status = BudgetStatus.WARNING
+        elif would_exceed:
             status = BudgetStatus.WARNING
         else:
             status = BudgetStatus.OK
