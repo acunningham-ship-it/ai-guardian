@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Guardian — The Smart Firewall for AI</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a0f;color:#e0e0e0;line-height:1.6}
+.container{max-width:900px;margin:0 auto;padding:40px 20px}
+.hero{text-align:center;padding:60px 0 40px}
+.badge{display:inline-block;background:#1a1a2e;border:1px solid #333;border-radius:20px;padding:6px 16px;font-size:13px;color:#888;margin-bottom:24px}
+h1{font-size:52px;font-weight:800;background:linear-gradient(135deg,#667eea,#764ba2,#f093fb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:16px;line-height:1.1}
+.sub{font-size:20px;color:#888;margin-bottom:32px;max-width:600px;margin-left:auto;margin-right:auto}
+.cta-row{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-bottom:48px}
+.btn{padding:14px 32px;border-radius:8px;font-size:16px;font-weight:600;text-decoration:none;transition:all .2s;cursor:pointer;border:none}
+.btn-primary{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 8px 25px rgba(102,126,234,.3)}
+.btn-secondary{background:transparent;color:#e0e0e0;border:1px solid #444}
+.btn-secondary:hover{border-color:#667eea}
+.email-capture{background:#111118;border:1px solid #222;border-radius:12px;padding:32px;max-width:500px;margin:0 auto 48px}
+.email-capture h3{margin-bottom:8px;font-size:18px}
+.email-capture p{color:#666;font-size:14px;margin-bottom:16px}
+.email-form{display:flex;gap:8px}
+.email-form input{flex:1;padding:12px 16px;border-radius:8px;border:1px solid #333;background:#0a0a0f;color:#e0e0e0;font-size:15px;outline:none}
+.email-form input:focus{border-color:#667eea}
+.email-form button{padding:12px 24px;border-radius:8px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;font-weight:600;cursor:pointer;font-size:15px;white-space:nowrap}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;padding:32px 0;border-top:1px solid #1a1a2e;border-bottom:1px solid #1a1a2e;margin-bottom:48px}
+.stat{text-align:center}
+.stat .num{font-size:36px;font-weight:800;background:linear-gradient(135deg,#667eea,#f093fb);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.stat .label{font-size:13px;color:#666;margin-top:4px}
+.pain{background:#111118;border-radius:12px;padding:32px;margin-bottom:32px;border-left:3px solid #e74c3c}
+.pain h2{margin-bottom:16px;font-size:22px}
+.pain ul{list-style:none}
+.pain li{padding:8px 0;color:#aaa;display:flex;gap:12px}
+.pain li:before{content:'⚠';color:#e74c3c}
+.features{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-bottom:48px}
+.feature{background:#111118;border:1px solid #1a1a2e;border-radius:12px;padding:24px}
+.feature .icon{font-size:28px;margin-bottom:12px}
+.feature h3{font-size:16px;margin-bottom:8px}
+.feature p{font-size:13px;color:#777}
+.how{background:#111118;border-radius:12px;padding:32px;margin-bottom:48px}
+.how h2{margin-bottom:20px;font-size:22px;text-align:center}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.step{text-align:center}
+.step .n{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;font-weight:700;margin:0 auto 12px}
+.step h4{font-size:14px;margin-bottom:6px}
+.step p{font-size:12px;color:#666}
+.pricing{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;margin-bottom:48px;max-width:700px;margin-left:auto;margin-right:auto}
+.card{background:#111118;border:1px solid #222;border-radius:12px;padding:32px;position:relative}
+.card.popular{border-color:#667eea}
+.card.popular::before{content:'POPULAR';position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#667eea,#764ba2);padding:4px 12px;border-radius:10px;font-size:11px;font-weight:700}
+.card h3{font-size:20px;margin-bottom:8px}
+.card .price{font-size:42px;font-weight:800;margin:16px 0}
+.card .price span{font-size:14px;color:#666;font-weight:400}
+.card ul{list-style:none;margin:20px 0}
+.card li{padding:6px 0;font-size:14px;color:#aaa;display:flex;gap:8px}
+.card li:before{content:'✓';color:#667eea}
+.card .btn{width:100%;text-align:center;display:block;margin-top:16px}
+.faq h2{text-align:center;margin-bottom:24px;font-size:22px}
+.faq-item{background:#111118;border:1px solid #1a1a2e;border-radius:8px;padding:20px 24px;margin-bottom:8px}
+.faq-item h4{font-size:15px;margin-bottom:4px}
+.faq-item p{font-size:13px;color:#777}
+.footer{text-align:center;padding:40px 0;border-top:1px solid #1a1a2e;color:#555;font-size:13px}
+a{color:#667eea}
+@media(max-width:700px){h1{font-size:34px}.features,.steps,.pricing{grid-template-columns:1fr}.stats{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="hero">
+<div class="badge">🛡️ Now in Beta — Free tier available</div>
+<h1>AI Guardian</h1>
+<p class="sub">The smart firewall for AI. Control costs, enforce quality, and monitor agents — all through one proxy.</p>
+<div class="cta-row">
+<a href="#pricing" class="btn btn-primary">Start Free</a>
+<a href="https://github.com/acunningham-ship-it/ai-guardian" class="btn btn-secondary">View on GitHub</a>
+</div>
+</div>
+<div class="email-capture">
+<h3>🚀 Get early access</h3>
+<p>Join the waiting list. Free tier for cost tracking. Paid plans for quality guardrails + agent monitoring.</p>
+<form class="email-form" id="signup">
+<input type="email" placeholder="you@email.com" required>
+<button type="submit">Join Waitlist</button>
+</form>
+<p id="thanks" style="display:none;color:#667eea;font-size:14px;margin-top:12px">✓ You're on the list!</p>
+</div>
+<div class="stats">
+<div class="stat"><div class="num">$500+</div><div class="label">Avg. monthly AI spend per engineer</div></div>
+<div class="stat"><div class="num">10-20x</div><div class="label">Silent cost bug multiplier</div></div>
+<div class="stat"><div class="num">446x</div><div class="label">Slower AI-generated code</div></div>
+</div>
+<div class="pain">
+<h2>The Problem</h2>
+<ul>
+<li>Uber burned its entire 2026 AI coding budget in 4 months</li>
+<li>Claude Code cache bugs silently <strong>10-20x your API costs</strong></li>
+<li>Developers accidentally burn <strong>$6,000 overnight</strong> from runaway agents</li>
+<li>AI-generated code has functions running <strong>446x slower</strong> than necessary</li>
+<li><strong>Zero tools</strong> combine cost control + quality guardrails + agent monitoring</li>
+</ul>
+</div>
+<div class="features">
+<div class="feature"><div class="icon">💰</div><h3>Cost Guardrails</h3><p>Set monthly/daily budgets. Auto-downgrade expensive models. Hard caps block requests before they hit the API.</p></div>
+<div class="feature"><div class="icon">🔍</div><h3>Quality Guardrails</h3><p>Security scanning (keys, SQL injection, eval). Performance analysis. Complexity checks. Hallucination detection.</p></div>
+<div class="feature"><div class="icon">🤖</div><h3>Agent Monitoring</h3><p>Track autonomous agent sessions. Iteration caps. Timeout protection. Per-agent cost allocation.</p></div>
+</div>
+<div class="how">
+<h2>How It Works</h2>
+<div class="steps">
+<div class="step"><div class="n">1</div><h4>Point your tools</h4><p>Set base_url to Guardian instead of directly at OpenAI/Anthropic</p></div>
+<div class="step"><div class="n">2</div><h4>Guardian intercepts</h4><p>Checks budget, scans code, routes to the best-value model</p></div>
+<div class="step"><div class="n">3</div><h4>Stay protected</h4><p>Dashboard shows spending, quality issues, and agent activity</p></div>
+</div>
+</div>
+<div id="pricing">
+<div class="pricing">
+<div class="card">
+<h3>Free</h3>
+<div class="price">$0<span>/mo</span></div>
+<p style="color:#666;font-size:13px">For individuals getting started</p>
+<ul><li>Cost tracking dashboard</li><li>Daily budget alerts</li><li>Up to 1,000 requests/day</li><li>Community support</li></ul>
+<a href="#" class="btn btn-secondary">Get Started</a>
+</div>
+<div class="card popular">
+<h3>Pro</h3>
+<div class="price">$19<span>/mo</span></div>
+<p style="color:#666;font-size:13px">For teams and power users</p>
+<ul><li>Everything in Free</li><li>Quality guardrails (security, perf)</li><li>Agent monitoring + iteration caps</li><li>Model auto-routing</li><li>Unlimited requests</li><li>Priority support</li></ul>
+<a href="#" class="btn btn-primary">Start Pro Trial</a>
+</div>
+</div>
+</div>
+<div class="faq">
+<h2>FAQ</h2>
+<div class="faq-item"><h4>Do I need to change my code?</h4><p>No. Guardian is OpenAI-compatible. Just change the base_url in Cursor, Claude Code, or any tool that supports a custom endpoint.</p></div>
+<div class="faq-item"><h4>Which AI providers do you support?</h4><p>OpenAI, Anthropic, Google Gemini, DeepSeek — any provider with an OpenAI-compatible API.</p></div>
+<div class="faq-item"><h4>Is my API key safe?</h4><p>Keys are encrypted at rest. Guardian never stores plaintext keys.</p></div>
+<div class="faq-item"><h4>Can I self-host?</h4><p>Yes. Docker support included. One command: docker run -p 9191:9191 ai-guardian</p></div>
+</div>
+<div class="footer">
+<p>Built by <a href="https://github.com/acunningham-ship-it">Armani Cunningham</a> · MIT License · <a href="https://github.com/acunningham-ship-it/ai-guardian">GitHub</a></p>
+</div>
+</div>
+<script>
+document.getElementById('signup').addEventListener('submit',function(e){
+e.preventDefault();
+fetch('/api/v1/waitlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:this.querySelector('input').value})}).then(function(){
+document.getElementById('signup').style.display='none';
+document.getElementById('thanks').style.display='block';
+}).catch(function(){alert('Error')});
+});
+</script>
+</body>
+</html>

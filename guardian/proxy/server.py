@@ -103,6 +103,8 @@ async def add_request_metadata(request: Request, call_next):
 @app.on_event("startup")
 async def startup():
     await init_db()
+    from guardian.api.waitlist import init_waitlist_table
+    await init_waitlist_table()
 
 
 # ── Health Check ───────────────────────────────────────────────────
@@ -110,6 +112,16 @@ async def startup():
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "ai-guardian", "version": "0.1.0"}
+
+
+# ── Waitlist ───────────────────────────────────────────────────────
+
+from guardian.api.waitlist import WaitlistSignup, add_to_waitlist
+
+@app.post("/api/v1/waitlist")
+async def join_waitlist(signup: WaitlistSignup):
+    result = await add_to_waitlist(signup.email)
+    return result
 
 
 # ── Dashboard Stats ────────────────────────────────────────────────

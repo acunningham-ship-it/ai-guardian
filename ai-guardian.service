@@ -1,0 +1,16 @@
+[Unit]
+Description=AI Guardian - AI Cost & Quality Proxy
+After=network.target
+
+[Service]
+Type=simple
+User=armani
+Group=armani
+WorkingDirectory=/home/armani/ai-guardian
+ExecStart=/usr/bin/python3 main.py
+Restart=always
+RestartSec=5
+EnvironmentFile=/home/armani/ai-guardian/.env
+
+[Install]
+WantedBy=multi-user.target
