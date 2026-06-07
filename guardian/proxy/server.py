@@ -899,7 +899,7 @@ async def get_user_savings(user_id: str, days: int = 30):
 async def landing_page():
     """Serve the marketing landing page."""
     import pathlib
-    landing = pathlib.Path(__file__).parent.parent / "landing" / "index.html"
+    landing = pathlib.Path(__file__).parent.parent.parent / "landing" / "index.html"
     if landing.exists():
         return HTMLResponse(content=landing.read_text())
     return HTMLResponse(content="<h1>AI Guardian</h1><p>Swap your base_url, save 40-80%.</p>")
