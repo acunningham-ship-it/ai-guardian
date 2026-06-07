@@ -22,6 +22,12 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 
 from guardian.cost.router import route_model
 from guardian.cost.tracker import estimate_cost, check_budget
+from guardian.cost.smart_tokens import compute_smart_max_tokens
+from guardian.cost.savings import record_savings, get_savings_summary, init_savings_db
+from guardian.cache.semantic import (
+    compute_cache_key, get_cached_response, store_cached_response,
+    get_cache_stats, init_cache_db,
+)
 from guardian.models import settings as app_settings
 from guardian.models.database import init_db, async_session, UsageLog, get_spent_since
 from guardian.models.schemas import (
@@ -41,6 +47,7 @@ PROVIDER_URLS = {
     "anthropic": "https://api.anthropic.com/v1",
     "google": "https://generativelanguage.googleapis.com/v1beta",
     "deepseek": "https://api.deepseek.com/v1",
+    "openrouter": "https://openrouter.ai/api/v1",
 }
 
 # Map model prefixes to providers
@@ -49,6 +56,7 @@ MODEL_PROVIDER_PREFIXES = {
     "anthropic/": "anthropic",
     "google/": "google",
     "deepseek/": "deepseek",
+    "openrouter/": "openrouter",
     "gpt-": "openai",
     "claude-": "anthropic",
     "gemini-": "google",
@@ -103,6 +111,8 @@ async def add_request_metadata(request: Request, call_next):
 @app.on_event("startup")
 async def startup():
     await init_db()
+    await init_cache_db()
+    await init_savings_db()
     from guardian.api.waitlist import init_waitlist_table
     await init_waitlist_table()
 
@@ -367,6 +377,8 @@ async def chat_completions(request: Request):
     """
     Main proxy endpoint — compatible with OpenAI Chat Completions API.
     Supports both streaming (SSE) and non-streaming responses.
+    
+    v2 features: semantic cache, smart max_tokens, savings tracking.
     """
     body = await request.json()
     req_id = request.state.request_id
@@ -384,10 +396,15 @@ async def chat_completions(request: Request):
 
     provider = resolve_provider(model)
 
+    # ── LAYER 0: Smart Max Tokens ─────────────────────────────────
+    # Dynamically set max_tokens based on task type to reduce output token costs
+    token_info = compute_smart_max_tokens(messages, max_tokens, app_settings.max_tokens_per_request)
+    effective_max_tokens = token_info["max_tokens"]
+
     # ── LAYER 1: Budget Check ──────────────────────────────────────
     # Estimate cost for budget check using max_tokens from the request
     _est_prompt_tokens = sum(len(m.get("content", "").split()) * 2 for m in messages)
-    _est_completion_tokens = max_tokens or app_settings.max_tokens_per_request
+    _est_completion_tokens = effective_max_tokens or app_settings.max_tokens_per_request
     _estimated_cost = estimate_cost(model, _est_prompt_tokens, _est_completion_tokens)
 
     budget = await check_budget(
@@ -406,7 +423,66 @@ async def chat_completions(request: Request):
             },
         )
 
-    # ── LAYER 2: Model Routing ────────────────────────────────────
+    # ── LAYER 2: Semantic Cache ───────────────────────────────────
+    # Check if we've seen this exact request before
+    cache_key = compute_cache_key(messages, model, temperature, effective_max_tokens)
+    cached = await get_cached_response(cache_key, user_id, max_age_hours=24)
+
+    if cached and not stream:
+        # Cache HIT — return immediately, zero API cost
+        # Record savings (full cost saved)
+        original_cost = estimate_cost(model, cached["prompt_tokens"], cached["completion_tokens"])
+        savings = await record_savings(
+            user_id=user_id,
+            original_cost=original_cost,
+            actual_cost=0.0,  # Cache hit = free
+            original_model=model,
+            routed_model=model,
+            cache_hit=True,
+            task_type=token_info.get("task_type"),
+            project_id=project_id,
+        )
+
+        # Log the cache hit
+        async with async_session() as db_session:
+            log_entry = UsageLog(
+                user_id=user_id, project_id=project_id, agent_id=agent_id,
+                model=model, provider=provider,
+                prompt_tokens=cached["prompt_tokens"],
+                completion_tokens=cached["completion_tokens"],
+                total_tokens=cached["total_tokens"],
+                cost_usd=0.0,
+                cached=True,
+                warnings=json.dumps(["cache_hit"]) ,
+            )
+            db_session.add(log_entry)
+            await db_session.commit()
+
+        return {
+            "id": f"guardian-{req_id}",
+            "object": "chat.completion",
+            "model": model,
+            "choices": [{
+                "index": 0,
+                "message": {"role": "assistant", "content": cached["content"]},
+                "finish_reason": "stop",
+            }],
+            "usage": {
+                "prompt_tokens": cached["prompt_tokens"],
+                "completion_tokens": cached["completion_tokens"],
+                "total_tokens": cached["total_tokens"],
+            },
+            "guardian": {
+                "cost_usd": 0.0,
+                "cache_hit": True,
+                "savings": savings,
+                "task_type": token_info.get("task_type"),
+                "smart_max_tokens": token_info,
+                "budget_status": budget.status.value,
+            },
+        }
+
+    # ── LAYER 3: Model Routing ────────────────────────────────────
     budget_remaining = max(0, budget.monthly_budget - budget.monthly_spent)
     routing = route_model(
         model, messages,
@@ -414,6 +490,9 @@ async def chat_completions(request: Request):
         prefer_cheap=app_settings.prefer_cheap_models,
     )
     routed_model = routing.routed_model
+
+    # Calculate the "would have cost" for savings tracking
+    original_cost_estimate = estimate_cost(model, _est_prompt_tokens, _est_completion_tokens)
 
     # ── Get API Key ────────────────────────────────────────────────
     api_key = get_api_key(provider, request)
@@ -432,21 +511,24 @@ async def chat_completions(request: Request):
     if stream:
         return await _streaming_proxy(
             req_id, provider, routed_model, api_key, messages,
-            max_tokens, temperature, user_id, project_id, agent_id,
-            session_id, model, routing, budget,
+            effective_max_tokens, temperature, user_id, project_id, agent_id,
+            session_id, model, routing, budget, cache_key, token_info,
+            original_cost_estimate,
         )
     else:
         return await _non_streaming_proxy(
             req_id, provider, routed_model, api_key, messages,
-            max_tokens, temperature, user_id, project_id, agent_id,
-            session_id, model, routing, budget,
+            effective_max_tokens, temperature, user_id, project_id, agent_id,
+            session_id, model, routing, budget, cache_key, token_info,
+            original_cost_estimate,
         )
 
 
 async def _non_streaming_proxy(
     req_id, provider, routed_model, api_key, messages,
     max_tokens, temperature, user_id, project_id, agent_id,
-    session_id, original_model, routing, budget,
+    session_id, original_model, routing, budget, cache_key, token_info,
+    original_cost_estimate,
 ):
     """Handle non-streaming requests."""
     provider_url, headers, request_body = _build_provider_request(
@@ -460,16 +542,50 @@ async def _non_streaming_proxy(
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
 
     usage_data, content = _parse_provider_response(provider, resp)
-    return _build_response(
+
+    # Store in cache for future hits
+    cost = estimate_cost(
+        routed_model,
+        usage_data.get("prompt_tokens", 0),
+        usage_data.get("completion_tokens", 0),
+    )
+    await store_cached_response(
+        cache_key=cache_key,
+        user_id=user_id,
+        model=routed_model,
+        request_model=original_model,
+        response_content=content,
+        prompt_tokens=usage_data.get("prompt_tokens", 0),
+        completion_tokens=usage_data.get("completion_tokens", 0),
+        cost_usd=cost,
+        project_id=project_id,
+    )
+
+    # Record savings
+    savings = await record_savings(
+        user_id=user_id,
+        original_cost=original_cost_estimate,
+        actual_cost=cost,
+        original_model=original_model,
+        routed_model=routed_model,
+        cache_hit=False,
+        task_type=token_info.get("task_type"),
+        project_id=project_id,
+        token_savings_usd=0.0,  # Token savings tracked separately if needed
+    )
+
+    return await _build_response(
         req_id, provider, routed_model, original_model, routing, budget,
         usage_data, content, messages, user_id, project_id, agent_id, session_id,
+        cache_key, token_info, savings,
     )
 
 
 async def _streaming_proxy(
     req_id, provider, routed_model, api_key, messages,
     max_tokens, temperature, user_id, project_id, agent_id,
-    session_id, original_model, routing, budget,
+    session_id, original_model, routing, budget, cache_key, token_info,
+    original_cost_estimate,
 ):
     """
     Handle streaming (SSE) requests.
@@ -635,6 +751,7 @@ def _build_provider_request(provider, routed_model, api_key, messages, max_token
 async def _build_response(
     req_id, provider, routed_model, original_model, routing, budget,
     usage_data, content, messages, user_id, project_id, agent_id, session_id,
+    cache_key=None, token_info=None, savings=None,
 ):
     """Build and return a non-streaming response with all guardrails applied."""
     cost = estimate_cost(
@@ -730,7 +847,26 @@ async def _build_response(
             "quality": quality.dict() if quality else None,
             "budget_status": budget.status.value,
             "warnings": warnings_list,
+            "savings": savings,
+            "task_type": token_info.get("task_type") if token_info else None,
+            "smart_max_tokens": token_info,
         },
+    }
+
+
+# ── Savings API ─────────────────────────────────────────────────────
+
+@app.get("/guardian/savings/{user_id}")
+async def get_user_savings(user_id: str, days: int = 30):
+    """Get cumulative savings for a user. 
+
+    This is THE number: 'Guardian saved you $X this month.'
+    """
+    summary = await get_savings_summary(user_id, days=days)
+    cache_stats = await get_cache_stats(user_id)
+    return {
+        "savings": summary,
+        "cache": cache_stats,
     }
 
 

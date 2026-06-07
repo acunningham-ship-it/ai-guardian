@@ -48,10 +48,13 @@ MODEL_PRICING: dict[str, dict[str, float]] = {
     "qwen3-35b":                  {"in": 0.00,  "out": 0.00},
     "qwen3-9b":                   {"in": 0.00,  "out": 0.00},
     # DeepSeek
-    "deepseek/deepseek-v3":       {"in": 0.27,  "out": 1.10},
-    "deepseek/deepseek-r1":       {"in": 0.55,  "out": 2.19},
-    "deepseek-v3":                {"in": 0.27,  "out": 1.10},
-    "deepseek-r1":                {"in": 0.55,  "out": 2.19},
+    "deepseek/deepseek-v3":       {"in": 0.27, "out": 1.10},
+    "deepseek/deepseek-r1":       {"in": 0.55, "out": 2.19},
+    "deepseek-v3":                {"in": 0.27, "out": 1.10},
+    "deepseek-r1":                {"in": 0.55, "out": 2.19},
+    # OpenRouter (free/cheap models)
+    "openrouter/owl-alpha":       {"in": 0.00, "out": 0.00},  # Free for Armani
+    "openrouter/auto":            {"in": 0.00, "out": 0.00},  # Router picks cheapest
 }
 
 
