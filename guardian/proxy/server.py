@@ -28,6 +28,11 @@ from guardian.cache.semantic import (
     compute_cache_key, get_cached_response, store_cached_response,
     get_cache_stats, init_cache_db,
 )
+from guardian.billing.stripe_ import (
+    check_request_allowed, increment_request_count, get_subscription,
+    create_checkout_session, create_customer_portal_session,
+    handle_webhook, init_billing_db, Tier, PRICE_IDS,
+)
 from guardian.models import settings as app_settings
 from guardian.models.database import init_db, async_session, UsageLog, get_spent_since
 from guardian.models.schemas import (
@@ -113,6 +118,7 @@ async def startup():
     await init_db()
     await init_cache_db()
     await init_savings_db()
+    await init_billing_db()
     from guardian.api.waitlist import init_waitlist_table
     await init_waitlist_table()
 
@@ -396,7 +402,21 @@ async def chat_completions(request: Request):
 
     provider = resolve_provider(model)
 
-    # ── LAYER 0: Smart Max Tokens ─────────────────────────────────
+    # ── LAYER 0: Subscription Check ────────────────────────────────
+    sub_check = await check_request_allowed(user_id)
+    if not sub_check["allowed"]:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "subscription_limit",
+                "message": sub_check.get("reason", "Request limit reached. Upgrade your plan."),
+                "tier": sub_check["tier"],
+                "requests_used": sub_check["requests_used"],
+                "requests_limit": sub_check["requests_limit"],
+            },
+        )
+
+    # ── LAYER 1: Smart Max Tokens ─────────────────────────────────
     # Dynamically set max_tokens based on task type to reduce output token costs
     token_info = compute_smart_max_tokens(messages, max_tokens, app_settings.max_tokens_per_request)
     effective_max_tokens = token_info["max_tokens"]
@@ -508,6 +528,9 @@ async def chat_completions(request: Request):
             )
 
     # ── Forward to Provider ───────────────────────────────────────
+    # Increment request count AFTER subscription check, BEFORE forwarding
+    await increment_request_count(user_id)
+
     if stream:
         return await _streaming_proxy(
             req_id, provider, routed_model, api_key, messages,
@@ -868,6 +891,72 @@ async def get_user_savings(user_id: str, days: int = 30):
         "savings": summary,
         "cache": cache_stats,
     }
+
+
+# ── Landing Page ────────────────────────────────────────────────────
+
+@app.get("/", response_class=HTMLResponse)
+async def landing_page():
+    """Serve the marketing landing page."""
+    import pathlib
+    landing = pathlib.Path(__file__).parent.parent / "landing" / "index.html"
+    if landing.exists():
+        return HTMLResponse(content=landing.read_text())
+    return HTMLResponse(content="<h1>AI Guardian</h1><p>Swap your base_url, save 40-80%.</p>")
+
+
+# ── Billing API ─────────────────────────────────────────────────────
+
+@app.get("/guardian/subscription/{user_id}")
+async def get_user_subscription(user_id: str):
+    """Get subscription info for a user."""
+    return await get_subscription(user_id)
+
+
+class CheckoutRequest(BaseModel):
+    user_id: str
+    tier: str  # personal, team, scale
+    success_url: str = "https://ai-guardian.dev/dashboard?upgraded=true"
+    cancel_url: str = "https://ai-guardian.dev/dashboard?canceled=true"
+
+
+@app.post("/guardian/checkout")
+async def create_checkout(req: CheckoutRequest):
+    """Create a Stripe checkout session for upgrading."""
+    if req.tier not in [Tier.PERSONAL.value, Tier.TEAM.value, Tier.SCALE.value]:
+        raise HTTPException(status_code=400, detail=f"Invalid tier: {req.tier}")
+    result = create_checkout_session(req.user_id, req.tier, req.success_url, req.cancel_url)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+class PortalRequest(BaseModel):
+    user_id: str
+    return_url: str = "https://ai-guardian.dev/dashboard"
+
+
+@app.post("/guardian/portal")
+async def create_portal(req: PortalRequest):
+    """Create a Stripe customer portal session."""
+    sub = await get_subscription(req.user_id)
+    if not sub or not sub.get("stripe_customer_id"):
+        raise HTTPException(status_code=400, detail="No Stripe customer ID. Subscribe first.")
+    result = create_customer_portal_session(req.user_id, sub["stripe_customer_id"], req.return_url)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@app.post("/guardian/webhook/stripe")
+async def stripe_webhook(request: Request):
+    """Handle Stripe webhook events."""
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature", "")
+    result = await handle_webhook(payload, sig)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
 
 
 def _parse_provider_response(provider: str, resp: httpx.Response) -> tuple[dict, str]:

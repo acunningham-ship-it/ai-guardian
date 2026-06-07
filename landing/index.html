@@ -3,154 +3,219 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Guardian — The Smart Firewall for AI</title>
+<title>AI Guardian — Cut your API bill by 40-80%</title>
+<meta name="description" content="Drop-in AI proxy that saves you money. Swap your base_url, keep your code. Smart caching, model routing, and budget enforcement in one line.">
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a0f;color:#e0e0e0;line-height:1.6}
-.container{max-width:900px;margin:0 auto;padding:40px 20px}
-.hero{text-align:center;padding:60px 0 40px}
-.badge{display:inline-block;background:#1a1a2e;border:1px solid #333;border-radius:20px;padding:6px 16px;font-size:13px;color:#888;margin-bottom:24px}
-h1{font-size:52px;font-weight:800;background:linear-gradient(135deg,#667eea,#764ba2,#f093fb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:16px;line-height:1.1}
-.sub{font-size:20px;color:#888;margin-bottom:32px;max-width:600px;margin-left:auto;margin-right:auto}
-.cta-row{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-bottom:48px}
-.btn{padding:14px 32px;border-radius:8px;font-size:16px;font-weight:600;text-decoration:none;transition:all .2s;cursor:pointer;border:none}
-.btn-primary{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff}
-.btn-primary:hover{transform:translateY(-1px);box-shadow:0 8px 25px rgba(102,126,234,.3)}
-.btn-secondary{background:transparent;color:#e0e0e0;border:1px solid #444}
-.btn-secondary:hover{border-color:#667eea}
-.email-capture{background:#111118;border:1px solid #222;border-radius:12px;padding:32px;max-width:500px;margin:0 auto 48px}
-.email-capture h3{margin-bottom:8px;font-size:18px}
-.email-capture p{color:#666;font-size:14px;margin-bottom:16px}
-.email-form{display:flex;gap:8px}
-.email-form input{flex:1;padding:12px 16px;border-radius:8px;border:1px solid #333;background:#0a0a0f;color:#e0e0e0;font-size:15px;outline:none}
-.email-form input:focus{border-color:#667eea}
-.email-form button{padding:12px 24px;border-radius:8px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;font-weight:600;cursor:pointer;font-size:15px;white-space:nowrap}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;padding:32px 0;border-top:1px solid #1a1a2e;border-bottom:1px solid #1a1a2e;margin-bottom:48px}
-.stat{text-align:center}
-.stat .num{font-size:36px;font-weight:800;background:linear-gradient(135deg,#667eea,#f093fb);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.stat .label{font-size:13px;color:#666;margin-top:4px}
-.pain{background:#111118;border-radius:12px;padding:32px;margin-bottom:32px;border-left:3px solid #e74c3c}
-.pain h2{margin-bottom:16px;font-size:22px}
-.pain ul{list-style:none}
-.pain li{padding:8px 0;color:#aaa;display:flex;gap:12px}
-.pain li:before{content:'⚠';color:#e74c3c}
-.features{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-bottom:48px}
-.feature{background:#111118;border:1px solid #1a1a2e;border-radius:12px;padding:24px}
-.feature .icon{font-size:28px;margin-bottom:12px}
-.feature h3{font-size:16px;margin-bottom:8px}
-.feature p{font-size:13px;color:#777}
-.how{background:#111118;border-radius:12px;padding:32px;margin-bottom:48px}
-.how h2{margin-bottom:20px;font-size:22px;text-align:center}
-.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
-.step{text-align:center}
-.step .n{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;font-weight:700;margin:0 auto 12px}
-.step h4{font-size:14px;margin-bottom:6px}
-.step p{font-size:12px;color:#666}
-.pricing{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;margin-bottom:48px;max-width:700px;margin-left:auto;margin-right:auto}
-.card{background:#111118;border:1px solid #222;border-radius:12px;padding:32px;position:relative}
-.card.popular{border-color:#667eea}
-.card.popular::before{content:'POPULAR';position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#667eea,#764ba2);padding:4px 12px;border-radius:10px;font-size:11px;font-weight:700}
-.card h3{font-size:20px;margin-bottom:8px}
-.card .price{font-size:42px;font-weight:800;margin:16px 0}
-.card .price span{font-size:14px;color:#666;font-weight:400}
-.card ul{list-style:none;margin:20px 0}
-.card li{padding:6px 0;font-size:14px;color:#aaa;display:flex;gap:8px}
-.card li:before{content:'✓';color:#667eea}
-.card .btn{width:100%;text-align:center;display:block;margin-top:16px}
-.faq h2{text-align:center;margin-bottom:24px;font-size:22px}
-.faq-item{background:#111118;border:1px solid #1a1a2e;border-radius:8px;padding:20px 24px;margin-bottom:8px}
-.faq-item h4{font-size:15px;margin-bottom:4px}
-.faq-item p{font-size:13px;color:#777}
-.footer{text-align:center;padding:40px 0;border-top:1px solid #1a1a2e;color:#555;font-size:13px}
-a{color:#667eea}
-@media(max-width:700px){h1{font-size:34px}.features,.steps,.pricing{grid-template-columns:1fr}.stats{grid-template-columns:1fr}}
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0a0a0f;--surface:#12121a;--border:#1e1e2e;--text:#e0e0e0;--dim:#888;--accent:#00ff88;--accent2:#00cc6a;--warn:#ff6b35}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+code{background:#1a1a2a;padding:0.1rem 0.4rem;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:0.9em}
+pre{background:#0d0d15;border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:0.85rem;line-height:1.5;margin:1rem 0}
+.hero{max-width:800px;margin:0 auto;padding:6rem 2rem 4rem;text-align:center}
+.hero h1{font-size:3rem;font-weight:800;margin-bottom:1rem;letter-spacing:-0.02em}
+.hero h1 span{color:var(--accent)}
+.hero p{font-size:1.2rem;color:var(--dim);max-width:560px;margin:0 auto 2rem}
+.cta{display:inline-block;background:var(--accent);color:#000;padding:0.8rem 2rem;border-radius:8px;font-weight:700;font-size:1.1rem;transition:background 0.2s}
+.cta:hover{background:var(--accent2);text-decoration:none}
+.cta-secondary{display:inline-block;border:1px solid var(--border);color:var(--text);padding:0.8rem 2rem;border-radius:8px;font-weight:500;font-size:1rem;margin-left:1rem}
+.cta-secondary:hover{border-color:var(--accent);text-decoration:none}
+.savings-bar{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:2rem;margin:0 auto 4rem;max-width:700px;text-align:center}
+.savings-bar .number{font-size:3.5rem;font-weight:800;color:var(--accent)}
+.savings-bar .label{font-size:1rem;color:var(--dim);margin-top:0.3rem}
+section{max-width:900px;margin:0 auto;padding:2rem}
+section h2{font-size:1.8rem;font-weight:700;margin-bottom:1.5rem;text-align:center}
+.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.5rem;margin-bottom:4rem}
+.feature{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.5rem}
+.feature h3{font-size:1.1rem;font-weight:600;margin-bottom:0.5rem;color:var(--accent)}
+.feature p{font-size:0.9rem;color:var(--dim)}
+.how-it-works{margin-bottom:4rem}
+.step{display:flex;gap:1.5rem;margin-bottom:2rem;align-items:flex-start}
+.step-num{background:var(--accent);color:#000;width:2rem;height:2rem;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0}
+.step-content h3{font-size:1.1rem;font-weight:600;margin-bottom:0.3rem}
+.step-content p{font-size:0.9rem;color:var(--dim)}
+.pricing{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1.5rem;margin-bottom:4rem}
+.plan{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:2rem;text-align:center}
+.plan.featured{border-color:var(--accent);position:relative}
+.plan.featured::after{content:'POPULAR';position:absolute;top:-10px;right:10px;background:var(--accent);color:#000;font-size:0.7rem;font-weight:700;padding:0.2rem 0.6rem;border-radius:4px}
+.plan h3{font-size:1.2rem;font-weight:600;margin-bottom:0.5rem}
+.plan .price{font-size:2.5rem;font-weight:800;margin:0.5rem 0}
+.plan .price span{font-size:1rem;font-weight:400;color:var(--dim)}
+.plan ul{list-style:none;text-align:left;margin:1rem 0;font-size:0.9rem;color:var(--dim)}
+.plan ul li{padding:0.3rem 0}
+.plan ul li::before{content:'✓ ';color:var(--accent)}
+.plan .cta{font-size:0.9rem;padding:0.6rem 1.5rem;width:100%;text-align:center}
+.comparison{margin-bottom:4rem;overflow-x:auto}
+.comparison table{width:100%;border-collapse:collapse;font-size:0.85rem}
+.comparison th,.comparison td{padding:0.7rem 1rem;text-align:left;border-bottom:1px solid var(--border)}
+.comparison th{color:var(--dim);font-weight:500;text-transform:uppercase;font-size:0.75rem}
+.comparison td:first-child{font-weight:600}
+.comparison .highlight{color:var(--accent);font-weight:600}
+footer{text-align:center;padding:3rem 2rem;color:var(--dim);font-size:0.85rem;border-top:1px solid var(--border)}
 </style>
 </head>
 <body>
-<div class="container">
+
 <div class="hero">
-<div class="badge">🛡️ Now in Beta — Free tier available</div>
-<h1>AI Guardian</h1>
-<p class="sub">The smart firewall for AI. Control costs, enforce quality, and monitor agents — all through one proxy.</p>
-<div class="cta-row">
-<a href="#pricing" class="btn btn-primary">Start Free</a>
-<a href="https://github.com/acunningham-ship-it/ai-guardian" class="btn btn-secondary">View on GitHub</a>
+  <h1>Cut your AI API bill by <span>40-80%</span></h1>
+  <p>AI Guardian is a drop-in proxy that sits between your app and OpenAI/Anthropic/Google. Smart caching, model routing, and budget enforcement — in one line of code.</p>
+  <a href="#pricing" class="cta">Start saving →</a>
+  <a href="https://github.com/acunningham-ship-it/ai-guardian" class="cta-secondary">View on GitHub</a>
 </div>
+
+<div class="savings-bar">
+  <div class="number">$0 → $0</div>
+  <div class="label">Average monthly savings for a team spending $200/mo on AI APIs</div>
 </div>
-<div class="email-capture">
-<h3>🚀 Get early access</h3>
-<p>Join the waiting list. Free tier for cost tracking. Paid plans for quality guardrails + agent monitoring.</p>
-<form class="email-form" id="signup">
-<input type="email" placeholder="you@email.com" required>
-<button type="submit">Join Waitlist</button>
-</form>
-<p id="thanks" style="display:none;color:#667eea;font-size:14px;margin-top:12px">✓ You're on the list!</p>
-</div>
-<div class="stats">
-<div class="stat"><div class="num">$500+</div><div class="label">Avg. monthly AI spend per engineer</div></div>
-<div class="stat"><div class="num">10-20x</div><div class="label">Silent cost bug multiplier</div></div>
-<div class="stat"><div class="num">446x</div><div class="label">Slower AI-generated code</div></div>
-</div>
-<div class="pain">
-<h2>The Problem</h2>
-<ul>
-<li>Uber burned its entire 2026 AI coding budget in 4 months</li>
-<li>Claude Code cache bugs silently <strong>10-20x your API costs</strong></li>
-<li>Developers accidentally burn <strong>$6,000 overnight</strong> from runaway agents</li>
-<li>AI-generated code has functions running <strong>446x slower</strong> than necessary</li>
-<li><strong>Zero tools</strong> combine cost control + quality guardrails + agent monitoring</li>
-</ul>
-</div>
-<div class="features">
-<div class="feature"><div class="icon">💰</div><h3>Cost Guardrails</h3><p>Set monthly/daily budgets. Auto-downgrade expensive models. Hard caps block requests before they hit the API.</p></div>
-<div class="feature"><div class="icon">🔍</div><h3>Quality Guardrails</h3><p>Security scanning (keys, SQL injection, eval). Performance analysis. Complexity checks. Hallucination detection.</p></div>
-<div class="feature"><div class="icon">🤖</div><h3>Agent Monitoring</h3><p>Track autonomous agent sessions. Iteration caps. Timeout protection. Per-agent cost allocation.</p></div>
-</div>
-<div class="how">
-<h2>How It Works</h2>
-<div class="steps">
-<div class="step"><div class="n">1</div><h4>Point your tools</h4><p>Set base_url to Guardian instead of directly at OpenAI/Anthropic</p></div>
-<div class="step"><div class="n">2</div><h4>Guardian intercepts</h4><p>Checks budget, scans code, routes to the best-value model</p></div>
-<div class="step"><div class="n">3</div><h4>Stay protected</h4><p>Dashboard shows spending, quality issues, and agent activity</p></div>
-</div>
-</div>
-<div id="pricing">
-<div class="pricing">
-<div class="card">
-<h3>Free</h3>
-<div class="price">$0<span>/mo</span></div>
-<p style="color:#666;font-size:13px">For individuals getting started</p>
-<ul><li>Cost tracking dashboard</li><li>Daily budget alerts</li><li>Up to 1,000 requests/day</li><li>Community support</li></ul>
-<a href="#" class="btn btn-secondary">Get Started</a>
-</div>
-<div class="card popular">
-<h3>Pro</h3>
-<div class="price">$19<span>/mo</span></div>
-<p style="color:#666;font-size:13px">For teams and power users</p>
-<ul><li>Everything in Free</li><li>Quality guardrails (security, perf)</li><li>Agent monitoring + iteration caps</li><li>Model auto-routing</li><li>Unlimited requests</li><li>Priority support</li></ul>
-<a href="#" class="btn btn-primary">Start Pro Trial</a>
-</div>
-</div>
-</div>
-<div class="faq">
-<h2>FAQ</h2>
-<div class="faq-item"><h4>Do I need to change my code?</h4><p>No. Guardian is OpenAI-compatible. Just change the base_url in Cursor, Claude Code, or any tool that supports a custom endpoint.</p></div>
-<div class="faq-item"><h4>Which AI providers do you support?</h4><p>OpenAI, Anthropic, Google Gemini, DeepSeek — any provider with an OpenAI-compatible API.</p></div>
-<div class="faq-item"><h4>Is my API key safe?</h4><p>Keys are encrypted at rest. Guardian never stores plaintext keys.</p></div>
-<div class="faq-item"><h4>Can I self-host?</h4><p>Yes. Docker support included. One command: docker run -p 9191:9191 ai-guardian</p></div>
-</div>
-<div class="footer">
-<p>Built by <a href="https://github.com/acunningham-ship-it">Armani Cunningham</a> · MIT License · <a href="https://github.com/acunningham-ship-it/ai-guardian">GitHub</a></p>
-</div>
-</div>
-<script>
-document.getElementById('signup').addEventListener('submit',function(e){
-e.preventDefault();
-fetch('/api/v1/waitlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:this.querySelector('input').value})}).then(function(){
-document.getElementById('signup').style.display='none';
-document.getElementById('thanks').style.display='block';
-}).catch(function(){alert('Error')});
-});
-</script>
+
+<section>
+  <h2>How it works</h2>
+  <div class="how-it-works">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <h3>Swap your base URL</h3>
+        <p>Point any OpenAI-compatible tool at Guardian instead of the provider.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <h3>Guardian optimizes every request</h3>
+        <p>Cache hits return instantly for free. Smart routing sends simple tasks to cheap models. Smart max_tokens cuts output costs.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <h3>See the savings</h3>
+        <p>Every response includes <code>X-Guardian-Savings</code> headers. Dashboard shows cumulative savings: "Guardian saved you $X this month."</p>
+      </div>
+    </div>
+  </div>
+
+  <pre># Cursor / Continue / any OpenAI SDK
+export OPENAI_BASE_URL=http://localhost:9191/v1
+
+# Claude Code
+export ANTHROPIC_BASE_URL=http://localhost:9191/v1
+
+# Done. That's it.</pre>
+</section>
+
+<section>
+  <h2>Features</h2>
+  <div class="features">
+    <div class="feature">
+      <h3>Semantic Cache</h3>
+      <p>Identical requests return cached responses instantly. Zero API cost. Saves 20-40% on repetitive workloads like agent loops.</p>
+    </div>
+    <div class="feature">
+      <h3>Smart Model Routing</h3>
+      <p>Simple tasks auto-route to cheap models (Haiku, GPT-4o-mini). Complex tasks get Opus. You never overpay.</p>
+    </div>
+    <div class="feature">
+      <h3>Smart max_tokens</h3>
+      <p>Output tokens cost 3-5x input tokens. Guardian classifies your task and sets optimal output limits automatically.</p>
+    </div>
+    <div class="feature">
+      <h3>Budget Enforcement</h3>
+      <p>Set daily/monthly budgets. Hard caps block requests BEFORE they reach the API. No more surprise bills.</p>
+    </div>
+    <div class="feature">
+      <h3>Provider Failover</h3>
+      <p>OpenAI down? Auto-retry on Anthropic. Rate limited? Exponential backoff with fallback chains.</p>
+    </div>
+    <div class="feature">
+      <h3>Quality Guardrails</h3>
+      <p>Security scanning, performance checks, hallucination detection on every response. Stop shipping vulnerable AI code.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>How Guardian saves you money</h2>
+  <div class="features">
+    <div class="feature">
+      <h3>Cache hit = $0</h3>
+      <p>Repeated prompts (agent loops, template fills, retry loops) hit cache instead of the API. Full cost saved.</p>
+    </div>
+    <div class="feature">
+      <h3>Smart routing = 60-80% off</h3>
+      <p>"Summarize this" doesn't need Opus. Guardian sends it to Haiku. Same quality, fraction of the cost.</p>
+    </div>
+    <div class="feature">
+      <h3>Smart tokens = 50-90% off output</h3>
+      <p>Most requests use max_tokens=4096 by default. Guardian sets 400 for summaries, 2000 for code. You only pay for what you need.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2 id="pricing">Pricing</h2>
+  <div class="pricing">
+    <div class="plan">
+      <h3>Free</h3>
+      <div class="price">$0<span>/mo</span></div>
+      <ul>
+        <li>100 requests/mo</li>
+        <li>$5 budget cap</li>
+        <li>Smart routing</li>
+        <li>Semantic cache</li>
+        <li>1 user</li>
+      </ul>
+      <a href="#" class="cta" style="background:var(--border);color:var(--text)">Get started</a>
+    </div>
+    <div class="plan featured">
+      <h3>Personal</h3>
+      <div class="price">$9<span>/mo</span></div>
+      <ul>
+        <li>10,000 requests/mo</li>
+        <li>$100 budget cap</li>
+        <li>All features</li>
+        <li>Savings dashboard</li>
+        <li>1 user</li>
+      </ul>
+      <a href="#" class="cta">Start saving</a>
+    </div>
+    <div class="plan">
+      <h3>Team</h3>
+      <div class="price">$29<span>/mo</span></div>
+      <ul>
+        <li>100,000 requests/mo</li>
+        <li>$500 budget cap</li>
+        <li>All features</li>
+        <li>5 users</li>
+        <li>Priority support</li>
+      </ul>
+      <a href="#" class="cta" style="background:var(--border);color:var(--text)">Start saving</a>
+    </div>
+  </div>
+  <p style="text-align:center;color:var(--dim);font-size:0.9rem">Guardian pays for itself. At $100/mo AI spend × 40% savings = $40 saved — $9 Guardian = <strong style="color:var(--accent)">$31 net positive from day 1</strong>.</p>
+</section>
+
+<section>
+  <h2>vs alternatives</h2>
+  <div class="comparison">
+    <table>
+      <tr><th>Feature</th><th>Helicone</th><th>Portkey</th><th>LiteLLM</th><th>Guardian</th></tr>
+      <tr><td>Cost tracking</td><td>✓</td><td>✓</td><td>—</td><td class="highlight">✓</td></tr>
+      <tr><td>Cost REDUCTION</td><td>—</td><td>partial</td><td>—</td><td class="highlight">✓</td></tr>
+      <tr><td>Semantic cache</td><td>—</td><td>basic</td><td>basic</td><td class="highlight">✓</td></tr>
+      <tr><td>Budget enforcement</td><td>—</td><td>—</td><td>—</td><td class="highlight">✓ hard caps</td></tr>
+      <tr><td>Smart max_tokens</td><td>—</td><td>—</td><td>—</td><td class="highlight">✓</td></tr>
+      <tr><td>Quality guardrails</td><td>eval</td><td>middleware</td><td>—</td><td class="highlight">✓ built-in</td></tr>
+      <tr><td>Provider failover</td><td>—</td><td>✓</td><td>✓</td><td class="highlight">✓</td></tr>
+      <tr><td>Price</td><td>$25/mo</td><td>enterprise</td><td>free</td><td class="highlight">$9/mo</td></tr>
+    </table>
+  </div>
+</section>
+
+<footer>
+  <p>AI Guardian — built by <a href="https://github.com/acunningham-ship-it">HamTek</a></p>
+  <p style="margin-top:0.5rem"><a href="https://github.com/acunningham-ship-it/ai-guardian">GitHub</a> · <a href="/docs">Docs</a> · <a href="mailto:hello@aiguardian.dev">Contact</a></p>
+</footer>
+
 </body>
 </html>

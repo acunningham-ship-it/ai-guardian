@@ -16,3 +16,4 @@ jwt
 passlib==1.7.*
 python-jose==3.3.*
 cryptography==44.0.*
+stripe>=15.0
